@@ -1,74 +1,109 @@
 #include <Servo.h>
 
-const int tweezerPin = A3;   
-const int fsrPin = A0;       
-const int vibeMotorPin = 3;  
-const int servoPin = 9;      
+// Tweezer / foil input
+const int tweezerPin = A3;
 
-const int fsrTouchThreshold = 980; 
-const unsigned long delayTime = 10000; 
+// FSR inputs
+const int fsrPinP1 = A0;
+const int fsrPinP2 = A1;
+
+// Outputs
+const int vibeMotorPin = 3;
+const int servoPin = 9;
+
+// FSR threshold
+const int fsrTouchThreshold = 980;
+
+// Servo countdown time
+const unsigned long delayTime = 10000;
 
 Servo gateServo;
+
 bool timerActive = false;
-bool lastFSRPressed = false;   
-unsigned long fsrTouchTime = 0; 
+
+bool lastFSRPressedP1 = false;
+bool lastFSRPressedP2 = false;
+
+unsigned long fsrTouchTime = 0;
 
 void setup() {
-  // Use 115200 baud rate for faster, low-latency communication with p5.js
-  Serial.begin(115200); 
-  
+  Serial.begin(115200);
+
+  // INPUT_PULLUP means the pin reads HIGH normally
+  // and LOW when connected to GND.
   pinMode(tweezerPin, INPUT_PULLUP);
+
+  pinMode(fsrPinP1, INPUT_PULLUP);
+  pinMode(fsrPinP2, INPUT_PULLUP);
+
   pinMode(vibeMotorPin, OUTPUT);
-  pinMode(fsrPin, INPUT_PULLUP); 
-  
+
   gateServo.attach(servoPin);
-  gateServo.write(0); 
+  gateServo.write(0);
 }
 
 void loop() {
+  // Read tweezers
   int tweezerState = digitalRead(tweezerPin);
-  int fsrValue = analogRead(fsrPin); 
-  
   bool touchingFoil = (tweezerState == LOW);
-  bool currentFSRPressed = (fsrValue < fsrTouchThreshold);
-  
-  // Handle instant haptics
+
+  // Read FSRs
+  int fsrValueP1 = analogRead(fsrPinP1);
+  int fsrValueP2 = analogRead(fsrPinP2);
+
+  bool currentFSRPressedP1 = (fsrValueP1 < fsrTouchThreshold);
+  bool currentFSRPressedP2 = (fsrValueP2 < fsrTouchThreshold);
+
+  // Vibration motor turns on when tweezers touch foil
   if (touchingFoil) {
     digitalWrite(vibeMotorPin, HIGH);
   } else {
     digitalWrite(vibeMotorPin, LOW);
   }
 
-  // Handle Servo countdown logic
-  if (currentFSRPressed && !lastFSRPressed) {
-    if (!timerActive) { 
+  // Start timer when either FSR is first pressed
+  if ((currentFSRPressedP1 && !lastFSRPressedP1) ||
+      (currentFSRPressedP2 && !lastFSRPressedP2)) {
+    if (!timerActive) {
       timerActive = true;
-      fsrTouchTime = millis(); 
+      fsrTouchTime = millis();
     }
   }
-  lastFSRPressed = currentFSRPressed;
 
+  lastFSRPressedP1 = currentFSRPressedP1;
+  lastFSRPressedP2 = currentFSRPressedP2;
+
+  // Servo opens after countdown finishes
   if (timerActive && (millis() - fsrTouchTime >= delayTime)) {
-    gateServo.write(90);  
-    delay(800);           
-    gateServo.write(0);   
-    delay(200);           
-    timerActive = false; 
+    gateServo.write(90);
+    delay(800);
+    gateServo.write(0);
+    delay(200);
+    timerActive = false;
   }
 
-  // Calculate remaining time to send to p5.js
   float secondsLeft = 0.0;
+
   if (timerActive) {
     secondsLeft = (float)(delayTime - (millis() - fsrTouchTime)) / 1000.0;
   }
 
-  // SEND CLEAN DATA PACKET TO P5JS:
-  // Format: touchingFoil,timerActive,secondsLeft
+  // Send to Unity
+  // Format:
+  // touchingFoil,timerActive,secondsLeft,p1FSRPressed,p1FSRValue,p2FSRPressed,p2FSRValue
   Serial.print(touchingFoil ? 1 : 0);
   Serial.print(",");
   Serial.print(timerActive ? 1 : 0);
   Serial.print(",");
-  Serial.println(secondsLeft, 2); // 2 decimal places
+  Serial.print(secondsLeft, 2);
+  Serial.print(",");
+  Serial.print(currentFSRPressedP1 ? 1 : 0);
+  Serial.print(",");
+  Serial.print(fsrValueP1);
+  Serial.print(",");
+  Serial.print(currentFSRPressedP2 ? 1 : 0);
+  Serial.print(",");
+  Serial.println(fsrValueP2);
 
-  delay(16); // Run at roughly 60Hz to match screen rendering
+  delay(16);
 }
