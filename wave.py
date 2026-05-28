@@ -12,7 +12,7 @@ UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # --- OVERHEAD STREAM ---
-DROIDCAM_URL = 1  
+DROIDCAM_URL = 2 
 
 # --- CORE TASK API ---
 BaseOptions = mp.tasks.BaseOptions
